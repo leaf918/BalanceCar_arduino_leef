@@ -40,6 +40,11 @@ long oldPosition  = -999;
 
 //   avoid using pins with LEDs attached
 ///////////////////////////////////
+#include "TrivialKalmanFilter/TrivialKalmanFilter.h"
+#define ONE_WIRE_BUS A1         // The pin DS18B20 is connected to.
+#define DT_COVARIANCE_RK 4.7e-3 // Estimation of the noise covariances (process)
+#define DT_COVARIANCE_QK 1e-5   // Estimation of the noise covariances (observation)
+TrivialKalmanFilter<float> filter(DT_COVARIANCE_RK, DT_COVARIANCE_QK);
 
 void setup() {
     Serial.begin(115200);//Initialize the serial port
