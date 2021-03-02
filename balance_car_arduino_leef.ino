@@ -16,13 +16,15 @@ L298N myMotor(motor_pin_a_1,motor_pin_a_2);
 // I2Cdev and MPU6050 must be installed as libraries, or else the .cpp/.h files
 // for both classes must be in the include path of your project
 #include "I2Cdev/I2Cdev.h"
-#include "MPU6050/MPU6050.h"
+#include "MPU6050_light/MPU6050_light.h"
+
 
 // class default I2C address is 0x68
 // specific I2C addresses may be passed as a parameter here
 // AD0 low = 0x68 (default for InvenSense evaluation board)
 // AD0 high = 0x69
-MPU6050 mpu;
+//MPU6050 mpu;
+MPU6050 mpu(Wire);
 
 int16_t ax,ay,az,tmp,gx,gy,gz;
 ///////////////////////////////////
@@ -42,12 +44,25 @@ long oldPosition  = -999;
 void setup() {
     Serial.begin(115200);//Initialize the serial port
     // Initialize the MPU6050
-    mpu.initialize();
+    mpu_initialize();
     // Do nothing for 2 milliseconds
     delay(2);
 //    HallEncoderInit();
 }
+void mpu_initialize(){
 
+    Wire.begin();
+
+    byte status = mpu.begin();
+    Serial.print(F("MPU6050 status: "));
+    Serial.println(status);
+    while(status!=0){ } // stop everything if could not connect to MPU6050
+
+    Serial.println(F("Calculating offsets, do not move MPU6050"));
+    delay(1000);
+    mpu.calcOffsets(); // gyro and accelero
+    Serial.println("Done!\n");
+}
 //void HallEncoderInit() {
 //    Direction = true;//default -> Forward
 //    pinMode(encoderB, INPUT);
@@ -77,25 +92,22 @@ void loop() {
 //    myMotor.backward();
 //    delay(3000);
     // read raw accel/gyro measurements from device
-//    mpu.getMotion6(&ax, &ay, &az, &gx, &gy, &gz);
-//    //获取当前内部温度
-//    tmp = mpu.getTemperature();
-//    // display tab-separated accel/gyro x/y/z values
-//    Serial.print("ax = ");
-//    Serial.print(ax);
-//    Serial.print(" | ay = ");
-//    Serial.print(ay);
-//    Serial.print(" | az = ");
-//    Serial.print(az);
-//    Serial.print(" | tmp = ");
-//    Serial.print(tmp/340.00+36.53);  //equation for temperature in degrees C from datasheet
-//    Serial.print(" | gx = ");
-//    Serial.print(gx);
-//    Serial.print(" | gy = ");
-//    Serial.print(gy);
-//    Serial.print(" | gz = ");
-//    Serial.println(gz);
-//    delay(400);
+    Serial.print(F("TEMPERATURE: "));Serial.println(mpu.getTemp());
+    Serial.print(F("ACCELERO  X: "));Serial.print(mpu.getAccX());
+    Serial.print("\tY: ");Serial.print(mpu.getAccY());
+    Serial.print("\tZ: ");Serial.println(mpu.getAccZ());
+
+    Serial.print(F("GYRO      X: "));Serial.print(mpu.getGyroX());
+    Serial.print("\tY: ");Serial.print(mpu.getGyroY());
+    Serial.print("\tZ: ");Serial.println(mpu.getGyroZ());
+
+    Serial.print(F("ACC ANGLE X: "));Serial.print(mpu.getAccAngleX());
+    Serial.print("\tY: ");Serial.println(mpu.getAccAngleY());
+
+    Serial.print(F("ANGLE     X: "));Serial.print(mpu.getAngleX());
+    Serial.print("\tY: ");Serial.print(mpu.getAngleY());
+    Serial.print("\tZ: ");Serial.println(mpu.getAngleZ());
+    Serial.println(F("=====================================================\n"));
     // hall encoder
     long newPosition = myEnc.read();
     if (newPosition != oldPosition) {

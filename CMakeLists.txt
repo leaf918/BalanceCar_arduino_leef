@@ -26,7 +26,7 @@ set(${PROJECT_NAME}_SKETCH balance_car_arduino_leef.ino)
 link_directories(${CMAKE_CURRENT_SOURCE_DIR}/./I2Cdev)
 
 link_directories(${CMAKE_CURRENT_SOURCE_DIR}/./L298N)
-link_directories(${CMAKE_CURRENT_SOURCE_DIR}/./MPU6050)
+link_directories(${CMAKE_CURRENT_SOURCE_DIR}/./MPU6050_light)
 link_directories(${CMAKE_CURRENT_SOURCE_DIR}/./Encoder)
 
 # For nested library sources replace ${LIB_NAME} with library name for each library
