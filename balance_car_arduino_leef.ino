@@ -21,8 +21,12 @@ L298N my_motor_left(motor_pin_a_1, motor_pin_a_2);
 L298N my_motor_right(motor_pin_b_1, motor_pin_b_2);
 
 /////////////////////////////////// Block MPU6050
+
 MPU6050 mpu(Wire);
 int16_t ax, ay, az, tmp, gx, gy, gz;
+/////////////////////////////////// Block MPU6050--GY25Z
+// 自带滤波，直接读出角度值
+
 /////////////////////////////////// Block Hall Encoder
 // Change these two numbers to the pins connected to your encoder.
 //   Best Performance: both pins have interrupt capability
@@ -39,9 +43,44 @@ Encoder motor_encoder_right(motor_hall_pin_interrupt_right, motor_hall_pin_digit
 //long oldPosition = -999;
 //   avoid using pins with LEDs attached
 /////////////////////////////////// Block Kalman Filter
+
 #define DT_COVARIANCE_RK 4.7e-3 // Estimation of the noise covariances (process)
 #define DT_COVARIANCE_QK 1e-5   // Estimation of the noise covariances (observation)
 TrivialKalmanFilter<float> filter(DT_COVARIANCE_RK, DT_COVARIANCE_QK);
+/// temp kalman filter paras
+///////////////////////Kalman_Filter////////////////////////////
+// Covariance of gyroscope noise
+float Q_angle = 0.001;
+
+// Covariance of gyroscope drift noise
+float Q_gyro = 0.003;
+
+// Covariance of accelerometer
+float R_angle = 0.5;
+char C_0 = 1;
+
+// The filter sampling time.
+float dt = 0.005;
+
+// a function containing the Kalman gain is used to
+// calculate the deviation of the optimal estimate.
+float K1 = 0.05;
+float K_0, K_1, t_0, t_1;
+float angle_err;
+
+// Gyroscope drift
+float q_bias;
+
+float accelz = 0;
+float angle;
+float angle_speed;
+
+float Pdot[4] = {0, 0, 0, 0};
+float P[2][2] = {{1, 0},
+                 {0, 1}};
+float PCt_0, PCt_1, E;
+//////////////////////Kalman_Filter/////////////////////////
+
 
 void setup() {
     Serial.begin(115200);//Initialize the serial port
@@ -72,41 +111,60 @@ void Interrupt_Service_Routine() {
     gy = mpu.getGyroY();
     gz = mpu.getGyroZ();
 
-    angle_calculate(ax, ay, az, gx, gy, gz, dt, Q_angle, Q_gyro, R_angle, C_0, K1);
+//    angle_calculate(ax, ay, az, gx, gy, gz, dt, Q_angle, Q_gyro, R_angle, C_0, K1);
+    /////////////////////////////angle calculate///////////////////////
+//    void angle_calculate(int16_t ax,int16_t ay,int16_t az,int16_t gx,int16_t gy,int16_t gz,float dt,float Q_angle,float Q_gyro,float R_angle,float C_0,float K1)
+    {
+        // Radial rotation angle calculation formula; negative sign is direction processing
+        Angle = -atan2(ay, az) * (180 / PI);
+
+        // The X-axis angular velocity calculated by the gyroscope; the negative sign is the direction processing
+        Gyro_x = -gx / 131;
+
+        // KalmanFilter
+        Kalman_Filter(Angle, Gyro_x);
+    }
     //get angle and Kalman filtering
-    PD();         //angle loop PD control
-    anglePWM();
+    PD_pwm = kp * (angle + angle0) + kd * angle_speed; //PD angle loop control
+    // Do PWM calculate
+    pwm2 = -PD_pwm - PI_pwm;           //assign the final value of PWM to motor
+    pwm1 = -PD_pwm - PI_pwm;
+    if (angle > 25 || angle < -25) {
+        pwm1 = pwm2 = 0;
+    }
+    // Determine the motor’s steering and speed by the positive and negative of PWM
+    my_motor_left.setSpeed(abs(pwm1));
+    my_motor_right.setSpeed(abs(pwm2));
+    pwm1 > 0 ? my_motor_left.forward() : my_motor_left.backward();
+    pwm2 > 0 ? my_motor_right.forward() : my_motor_right.backward();
 
-//    cc++;
-//    if (cc >= 8)     //5*8=40，40ms entering once speed PI algorithm
-//    {
+    cc++;
+    if (cc >= 8)     //5*8=40，40ms entering once speed PI algorithm
+    {
 //        speedpiout();
-//        cc = 0;  //Clear
-//    }
+        float speeds = (motor_encoder_left.read() + motor_encoder_right.read()) * 1.0;      //Vehicle speed  pulse value
+//        pulseright = pulseleft = 0;      //Clear
+        motor_encoder_left.write(0);
+        motor_encoder_right.write(0);
+        speeds_filterold *= 0.7;         //first-order complementary filtering
+        speeds_filter = speeds_filterold + speeds * 0.3;
+        speeds_filterold = speeds_filter;
+        positions += speeds_filter;
+        positions = constrain(positions, -3550, 3550);    //Anti-integral saturation
+        PI_pwm = ki_speed * (setp0 - positions) + kp_speed * (setp0 - speeds_filter);      //speed loop control PI
+
+        cc = 0;  //Clear
+    }
 }
 
-void angle_calculate(int16_t ax, int16_t ay, int16_t az, int16_t gx, int16_t gy, int16_t gz, float dt, float Q_angle, float Q_gyro, float R_angle, float C_0,
-                     float K1) {
-    float Angle = -atan2(ay, az) * (180 / PI);           //Radial rotation angle calculation formula; negative sign is direction processing
-    Gyro_x = -gx / 131;              //The X-axis angular velocity calculated by the gyroscope; the negative sign is the direction processing
-    Kalman_Filter(Angle, Gyro_x);            //Kalman Filtering
-    //Rotation angle Z-axis parameter
-    Gyro_z = -gz / 131;                      //Z-axis angular velocity
-    //accelz = az / 16.4;
 
-    float angleAx = -atan2(ax, az) * (180 / PI); //Calculate the angle with the x-axis
-    Gyro_y = -gy / 131.00; //Y-axis angular velocity
-    Yiorderfilter(angleAx, Gyro_y); //first-order filtering
-}
-
-void Kalman_Filter(double angle_m, double gyro_m)
-{
+void Kalman_Filter(double angle_m, double gyro_m) {
     angle += (gyro_m - q_bias) * dt;          //Prior estimate
     angle_err = angle_m - angle;
 
     Pdot[0] = Q_angle - P[0][1] - P[1][0];    //Differential of azimuth error covariance
-    Pdot[1] = - P[1][1];
-    Pdot[2] = - P[1][1];
+    Pdot[1] = -P[1][1];
+    Pdot[2] = -P[1][1];
     Pdot[3] = Q_gyro;
 
     P[0][0] += Pdot[0] * dt;    //A priori estimation error covariance differential integral
@@ -134,25 +192,4 @@ void Kalman_Filter(double angle_m, double gyro_m)
     q_bias += K_1 * angle_err;    //Posterior estimate
     angle_speed = gyro_m - q_bias;   //The differential of the output value gives the optimal angular velocity
     angle += K_0 * angle_err; ////Posterior estimation to get the optimal angle
-}
-
-void Yiorderfilter(float angle_m, float gyro_m) {
-    angleY_one = K1 * angle_m + (1 - K1) * (angleY_one + gyro_m * dt);
-}
-
-void PD() {
-    PD_pwm = kp * (angle + angle0) + kd * angle_speed; //PD angle loop control
-}
-
-void anglePWM() {
-    pwm2 = -PD_pwm - PI_pwm;           //assign the final value of PWM to motor
-    pwm1 = -PD_pwm - PI_pwm;
-    if (angle > 25 || angle < -25) {
-        pwm1 = pwm2 = 0;
-    }
-    // Determine the motor’s steering and speed by the positive and negative of PWM
-    my_motor_left.setSpeed(abs(pwm1));
-    my_motor_right.setSpeed(abs(pwm2));
-    pwm1>0?my_motor_left.forward():my_motor_left.backward();
-    pwm2>0?my_motor_right.forward():my_motor_right.backward();
 }
