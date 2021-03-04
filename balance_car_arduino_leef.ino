@@ -1,123 +1,158 @@
-///////////////////////////////////
+// Motor Driver
 #include "L298N/L298N.h"
-const unsigned int motor_pin_a_1=4;
-const unsigned int motor_pin_a_2=5;
-const unsigned int motor_pin_b_1=6;
-const unsigned int motor_pin_b_2=7;
-
-L298N myMotor(motor_pin_a_1,motor_pin_a_2);
-///////////////////////////////////
-
-///////////////////////////////////
 // Arduino Wire library is required if I2Cdev I2CDEV_ARDUINO_WIRE implementation
 // is used in I2Cdev.h
 #include "Wire.h"
-
 // I2Cdev and MPU6050 must be installed as libraries, or else the .cpp/.h files
 // for both classes must be in the include path of your project
 #include "I2Cdev/I2Cdev.h"
 #include "MPU6050_light/MPU6050_light.h"
-
-
-// class default I2C address is 0x68
-// specific I2C addresses may be passed as a parameter here
-// AD0 low = 0x68 (default for InvenSense evaluation board)
-// AD0 high = 0x69
-//MPU6050 mpu;
-MPU6050 mpu(Wire);
-
-int16_t ax,ay,az,tmp,gx,gy,gz;
-///////////////////////////////////
 // Hall encoder
 #include "Encoder/Encoder.h"
+// Kalman filter
+#include "TrivialKalmanFilter/TrivialKalmanFilter.h"
 
+/////////////////////////////////// Block Motor
+const unsigned int motor_pin_a_1 = 4;
+const unsigned int motor_pin_a_2 = 5;
+const unsigned int motor_pin_b_1 = 6;
+const unsigned int motor_pin_b_2 = 7;
+L298N my_motor_left(motor_pin_a_1, motor_pin_a_2);
+L298N my_motor_right(motor_pin_b_1, motor_pin_b_2);
+
+/////////////////////////////////// Block MPU6050
+MPU6050 mpu(Wire);
+int16_t ax, ay, az, tmp, gx, gy, gz;
+/////////////////////////////////// Block Hall Encoder
 // Change these two numbers to the pins connected to your encoder.
 //   Best Performance: both pins have interrupt capability
 //   Good Performance: only the first pin has interrupt capability
 //   Low Performance:  neither pin has interrupt capability
-Encoder myEnc(10,11);
-long oldPosition  = -999;
+const unsigned int motor_hall_pin_interrupt_left = 2;
+const unsigned int motor_hall_pin_digit_left = 11;
 
+const unsigned int motor_hall_pin_interrupt_right = 3;
+const unsigned int motor_hall_pin_digit_right = 12;
+
+Encoder motor_encoder_left(motor_hall_pin_interrupt_left, motor_hall_pin_digit_left);
+Encoder motor_encoder_right(motor_hall_pin_interrupt_right, motor_hall_pin_digit_right);
+//long oldPosition = -999;
 //   avoid using pins with LEDs attached
-///////////////////////////////////
-#include "TrivialKalmanFilter/TrivialKalmanFilter.h"
-#define ONE_WIRE_BUS A1         // The pin DS18B20 is connected to.
+/////////////////////////////////// Block Kalman Filter
 #define DT_COVARIANCE_RK 4.7e-3 // Estimation of the noise covariances (process)
 #define DT_COVARIANCE_QK 1e-5   // Estimation of the noise covariances (observation)
 TrivialKalmanFilter<float> filter(DT_COVARIANCE_RK, DT_COVARIANCE_QK);
 
 void setup() {
     Serial.begin(115200);//Initialize the serial port
-    // Initialize the MPU6050
     mpu_initialize();
-    // Do nothing for 2 milliseconds
     delay(2);
-//    HallEncoderInit();
+    MsTimer2::set(5, Interrupt_Service_Routine);    //5ms ; execute the function Interrupt_Service_Routine once
+    MsTimer2::start();    //start interrupt
 }
-void mpu_initialize(){
 
+void mpu_initialize() {
     Wire.begin();
-
     byte status = mpu.begin();
     Serial.print(F("MPU6050 status: "));
     Serial.println(status);
-    while(status!=0){ } // stop everything if could not connect to MPU6050
-
+    while (status != 0) {} // stop everything if could not connect to MPU6050
     Serial.println(F("Calculating offsets, do not move MPU6050"));
     delay(1000);
     mpu.calcOffsets(); // gyro and accelero
-    Serial.println("Done!\n");
+    Serial.println("MPU6050 Done!\n");
 }
-//void HallEncoderInit() {
-//    Direction = true;//default -> Forward
-//    pinMode(encoderB, INPUT);
-//    attachInterrupt(0, hallChangeHandler1, CHANGE);
-//}
 
-//void hallChangeHandler1() {
-//    int Lstate = digitalRead(encoderA);
-//    if ((encoderALast == LOW) && Lstate == HIGH) {
-//        int val = digitalRead(encoderB);
-//        if (val == LOW && Direction) {
-//            Direction = false; //Reverse
-//        } else if (val == HIGH && !Direction) {
-//            Direction = true;  //Forward
-//        }
+void Interrupt_Service_Routine() {
+    tmp = mpu.getTemp();
+    ax = mpu.getAngleX();
+    ay = mpu.getAngleY();
+    az = mpu.getAngleZ();
+    gx = mpu.getGyroX();
+    gy = mpu.getGyroY();
+    gz = mpu.getGyroZ();
+
+    angle_calculate(ax, ay, az, gx, gy, gz, dt, Q_angle, Q_gyro, R_angle, C_0, K1);
+    //get angle and Kalman filtering
+    PD();         //angle loop PD control
+    anglePWM();
+
+//    cc++;
+//    if (cc >= 8)     //5*8=40，40ms entering once speed PI algorithm
+//    {
+//        speedpiout();
+//        cc = 0;  //Clear
 //    }
-//    encoderALast = Lstate;
-//
-//    if (!Direction) duration++;
-//    else duration--;
-//}
+}
 
-void loop() {
-    // put your main code here, to run repeatedly:
-//    myMotor.forward();
-//    delay(3000);
-//    myMotor.backward();
-//    delay(3000);
-    // read raw accel/gyro measurements from device
-    Serial.print(F("TEMPERATURE: "));Serial.println(mpu.getTemp());
-    Serial.print(F("ACCELERO  X: "));Serial.print(mpu.getAccX());
-    Serial.print("\tY: ");Serial.print(mpu.getAccY());
-    Serial.print("\tZ: ");Serial.println(mpu.getAccZ());
+void angle_calculate(int16_t ax, int16_t ay, int16_t az, int16_t gx, int16_t gy, int16_t gz, float dt, float Q_angle, float Q_gyro, float R_angle, float C_0,
+                     float K1) {
+    float Angle = -atan2(ay, az) * (180 / PI);           //Radial rotation angle calculation formula; negative sign is direction processing
+    Gyro_x = -gx / 131;              //The X-axis angular velocity calculated by the gyroscope; the negative sign is the direction processing
+    Kalman_Filter(Angle, Gyro_x);            //Kalman Filtering
+    //Rotation angle Z-axis parameter
+    Gyro_z = -gz / 131;                      //Z-axis angular velocity
+    //accelz = az / 16.4;
 
-    Serial.print(F("GYRO      X: "));Serial.print(mpu.getGyroX());
-    Serial.print("\tY: ");Serial.print(mpu.getGyroY());
-    Serial.print("\tZ: ");Serial.println(mpu.getGyroZ());
+    float angleAx = -atan2(ax, az) * (180 / PI); //Calculate the angle with the x-axis
+    Gyro_y = -gy / 131.00; //Y-axis angular velocity
+    Yiorderfilter(angleAx, Gyro_y); //first-order filtering
+}
 
-    Serial.print(F("ACC ANGLE X: "));Serial.print(mpu.getAccAngleX());
-    Serial.print("\tY: ");Serial.println(mpu.getAccAngleY());
+void Kalman_Filter(double angle_m, double gyro_m)
+{
+    angle += (gyro_m - q_bias) * dt;          //Prior estimate
+    angle_err = angle_m - angle;
 
-    Serial.print(F("ANGLE     X: "));Serial.print(mpu.getAngleX());
-    Serial.print("\tY: ");Serial.print(mpu.getAngleY());
-    Serial.print("\tZ: ");Serial.println(mpu.getAngleZ());
-    Serial.println(F("=====================================================\n"));
-    // hall encoder
-    long newPosition = myEnc.read();
-    if (newPosition != oldPosition) {
-        oldPosition = newPosition;
-        Serial.println(newPosition);
+    Pdot[0] = Q_angle - P[0][1] - P[1][0];    //Differential of azimuth error covariance
+    Pdot[1] = - P[1][1];
+    Pdot[2] = - P[1][1];
+    Pdot[3] = Q_gyro;
+
+    P[0][0] += Pdot[0] * dt;    //A priori estimation error covariance differential integral
+    P[0][1] += Pdot[1] * dt;
+    P[1][0] += Pdot[2] * dt;
+    P[1][1] += Pdot[3] * dt;
+
+    //Intermediate variable of matrix multiplication
+    PCt_0 = C_0 * P[0][0];
+    PCt_1 = C_0 * P[1][0];
+    //Denominator
+    E = R_angle + C_0 * PCt_0;
+    //gain value
+    K_0 = PCt_0 / E;
+    K_1 = PCt_1 / E;
+
+    t_0 = PCt_0;  //Intermediate variable of matrix multiplication
+    t_1 = C_0 * P[0][1];
+
+    P[0][0] -= K_0 * t_0;    //Posterior estimation error covariance
+    P[0][1] -= K_0 * t_1;
+    P[1][0] -= K_1 * t_0;
+    P[1][1] -= K_1 * t_1;
+
+    q_bias += K_1 * angle_err;    //Posterior estimate
+    angle_speed = gyro_m - q_bias;   //The differential of the output value gives the optimal angular velocity
+    angle += K_0 * angle_err; ////Posterior estimation to get the optimal angle
+}
+
+void Yiorderfilter(float angle_m, float gyro_m) {
+    angleY_one = K1 * angle_m + (1 - K1) * (angleY_one + gyro_m * dt);
+}
+
+void PD() {
+    PD_pwm = kp * (angle + angle0) + kd * angle_speed; //PD angle loop control
+}
+
+void anglePWM() {
+    pwm2 = -PD_pwm - PI_pwm;           //assign the final value of PWM to motor
+    pwm1 = -PD_pwm - PI_pwm;
+    if (angle > 25 || angle < -25) {
+        pwm1 = pwm2 = 0;
     }
-
+    // Determine the motor’s steering and speed by the positive and negative of PWM
+    my_motor_left.setSpeed(abs(pwm1));
+    my_motor_right.setSpeed(abs(pwm2));
+    pwm1>0?my_motor_left.forward():my_motor_left.backward();
+    pwm2>0?my_motor_right.forward():my_motor_right.backward();
 }
