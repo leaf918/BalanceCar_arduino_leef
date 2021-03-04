@@ -10,7 +10,7 @@
 // Hall encoder
 #include "Encoder/Encoder.h"
 // Kalman filter
-#include "TrivialKalmanFilter/TrivialKalmanFilter.h"
+//#include "TrivialKalmanFilter/TrivialKalmanFilter.h"
 
 /////////////////////////////////// Block Motor
 const unsigned int motor_pin_a_1 = 4;
@@ -43,10 +43,10 @@ Encoder motor_encoder_right(motor_hall_pin_interrupt_right, motor_hall_pin_digit
 //long oldPosition = -999;
 //   avoid using pins with LEDs attached
 /////////////////////////////////// Block Kalman Filter
-
-#define DT_COVARIANCE_RK 4.7e-3 // Estimation of the noise covariances (process)
-#define DT_COVARIANCE_QK 1e-5   // Estimation of the noise covariances (observation)
-TrivialKalmanFilter<float> filter(DT_COVARIANCE_RK, DT_COVARIANCE_QK);
+// TrivialKalmanFilter is too simple to be used in this case.
+//#define DT_COVARIANCE_RK 4.7e-3 // Estimation of the noise covariances (process)
+//#define DT_COVARIANCE_QK 1e-5   // Estimation of the noise covariances (observation)
+//TrivialKalmanFilter<float> filter(DT_COVARIANCE_RK, DT_COVARIANCE_QK);
 /// temp kalman filter paras
 ///////////////////////Kalman_Filter////////////////////////////
 // Covariance of gyroscope noise
@@ -110,17 +110,14 @@ void Interrupt_Service_Routine() {
     gx = mpu.getGyroX();
     gy = mpu.getGyroY();
     gz = mpu.getGyroZ();
-
 //    angle_calculate(ax, ay, az, gx, gy, gz, dt, Q_angle, Q_gyro, R_angle, C_0, K1);
     /////////////////////////////angle calculate///////////////////////
 //    void angle_calculate(int16_t ax,int16_t ay,int16_t az,int16_t gx,int16_t gy,int16_t gz,float dt,float Q_angle,float Q_gyro,float R_angle,float C_0,float K1)
     {
         // Radial rotation angle calculation formula; negative sign is direction processing
         Angle = -atan2(ay, az) * (180 / PI);
-
         // The X-axis angular velocity calculated by the gyroscope; the negative sign is the direction processing
         Gyro_x = -gx / 131;
-
         // KalmanFilter
         Kalman_Filter(Angle, Gyro_x);
     }
@@ -141,9 +138,7 @@ void Interrupt_Service_Routine() {
     cc++;
     if (cc >= 8)     //5*8=40，40ms entering once speed PI algorithm
     {
-//        speedpiout();
         float speeds = (motor_encoder_left.read() + motor_encoder_right.read()) * 1.0;      //Vehicle speed  pulse value
-//        pulseright = pulseleft = 0;      //Clear
         motor_encoder_left.write(0);
         motor_encoder_right.write(0);
         speeds_filterold *= 0.7;         //first-order complementary filtering
@@ -152,7 +147,6 @@ void Interrupt_Service_Routine() {
         positions += speeds_filter;
         positions = constrain(positions, -3550, 3550);    //Anti-integral saturation
         PI_pwm = ki_speed * (setp0 - positions) + kp_speed * (setp0 - speeds_filter);      //speed loop control PI
-
         cc = 0;  //Clear
     }
 }
