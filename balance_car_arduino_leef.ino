@@ -13,6 +13,7 @@
 //#include "TrivialKalmanFilter/TrivialKalmanFilter.h"
 // ms timer
 #include "MsTimer2/MsTimer2.h"
+
 /////////////////////////////////// Block Motor
 const unsigned int motor_pin_a_1 = 4;
 const unsigned int motor_pin_a_2 = 5;
@@ -22,7 +23,7 @@ L298N my_motor_left(motor_pin_a_1, motor_pin_a_2);
 L298N my_motor_right(motor_pin_b_1, motor_pin_b_2);
 
 /////////////////////////////////// Block MPU6050
-
+// TODO mpu6050_light自带滤波？需要检查下
 MPU6050 mpu(Wire);
 int16_t ax, ay, az, tmp, gx, gy, gz;
 /////////////////////////////////// Block MPU6050--GY25Z
@@ -86,16 +87,16 @@ double kp = 34, ki = 0, kd = 0.62;                   //angle loop parameters
 double kp_speed = 3.6, ki_speed = 0.080, kd_speed = 0;   // speed loop parameters
 double setp0 = 0; //angle balance point
 int PD_pwm;  //angle output
-float pwm1=0,pwm2=0;
+float pwm1 = 0, pwm2 = 0;
 ///////////////////////angle parameters//////////////////////////////
 float angle_X; //Calculate the tilt angle variable about the X axis from the acceleration
 float angle_Y; //Calculate the tilt angle variable about the Y axis from the acceleration
 float angle0 = 1; //Actual measured angle (ideally 0 degrees)
-float Gyro_x,Gyro_y,Gyro_z;  //Angular angular velocity by gyroscope calculation
+float Gyro_x, Gyro_y, Gyro_z;  //Angular angular velocity by gyroscope calculation
 ///////////////////////angle parameters//////////////////////////////
 ////////////////////////////////PI variable parameters//////////////////////////
-float speeds_filterold=0;
-float positions=0;
+float speeds_filterold = 0;
+float positions = 0;
 int flag1;
 double PI_pwm;
 int cc;
@@ -109,7 +110,9 @@ void setup() {
     MsTimer2::set(5, Interrupt_Service_Routine);    //5ms ; execute the function Interrupt_Service_Routine once
 //    MsTimer2::start();    //start interrupt
 }
-void loop(){};
+
+void loop() {};
+
 void mpu_initialize() {
     Wire.begin();
     byte status = mpu.begin();
