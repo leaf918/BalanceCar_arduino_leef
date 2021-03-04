@@ -11,7 +11,8 @@
 #include "Encoder/Encoder.h"
 // Kalman filter
 //#include "TrivialKalmanFilter/TrivialKalmanFilter.h"
-
+// ms timer
+#include "MsTimer2/MsTimer2.h"
 /////////////////////////////////// Block Motor
 const unsigned int motor_pin_a_1 = 4;
 const unsigned int motor_pin_a_2 = 5;
@@ -80,16 +81,35 @@ float P[2][2] = {{1, 0},
                  {0, 1}};
 float PCt_0, PCt_1, E;
 //////////////////////Kalman_Filter/////////////////////////
-
+//////////////////////PID parameters///////////////////////////////
+double kp = 34, ki = 0, kd = 0.62;                   //angle loop parameters
+double kp_speed = 3.6, ki_speed = 0.080, kd_speed = 0;   // speed loop parameters
+double setp0 = 0; //angle balance point
+int PD_pwm;  //angle output
+float pwm1=0,pwm2=0;
+///////////////////////angle parameters//////////////////////////////
+float angle_X; //Calculate the tilt angle variable about the X axis from the acceleration
+float angle_Y; //Calculate the tilt angle variable about the Y axis from the acceleration
+float angle0 = 1; //Actual measured angle (ideally 0 degrees)
+float Gyro_x,Gyro_y,Gyro_z;  //Angular angular velocity by gyroscope calculation
+///////////////////////angle parameters//////////////////////////////
+////////////////////////////////PI variable parameters//////////////////////////
+float speeds_filterold=0;
+float positions=0;
+int flag1;
+double PI_pwm;
+int cc;
+int speedout;
+float speeds_filter;
 
 void setup() {
     Serial.begin(115200);//Initialize the serial port
     mpu_initialize();
     delay(2);
     MsTimer2::set(5, Interrupt_Service_Routine);    //5ms ; execute the function Interrupt_Service_Routine once
-    MsTimer2::start();    //start interrupt
+//    MsTimer2::start();    //start interrupt
 }
-
+void loop(){};
 void mpu_initialize() {
     Wire.begin();
     byte status = mpu.begin();
@@ -115,14 +135,14 @@ void Interrupt_Service_Routine() {
 //    void angle_calculate(int16_t ax,int16_t ay,int16_t az,int16_t gx,int16_t gy,int16_t gz,float dt,float Q_angle,float Q_gyro,float R_angle,float C_0,float K1)
     {
         // Radial rotation angle calculation formula; negative sign is direction processing
-        Angle = -atan2(ay, az) * (180 / PI);
+        float Angle = -atan2(ay, az) * (180 / PI);
         // The X-axis angular velocity calculated by the gyroscope; the negative sign is the direction processing
-        Gyro_x = -gx / 131;
+        float Gyro_x = -gx / 131;
         // KalmanFilter
         Kalman_Filter(Angle, Gyro_x);
     }
     //get angle and Kalman filtering
-    PD_pwm = kp * (angle + angle0) + kd * angle_speed; //PD angle loop control
+    float PD_pwm = kp * (angle + angle0) + kd * angle_speed; //PD angle loop control
     // Do PWM calculate
     pwm2 = -PD_pwm - PI_pwm;           //assign the final value of PWM to motor
     pwm1 = -PD_pwm - PI_pwm;

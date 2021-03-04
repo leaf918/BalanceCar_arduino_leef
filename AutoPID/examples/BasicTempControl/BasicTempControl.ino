@@ -55,7 +55,8 @@ void setup() {
   temperatureSensors.requestTemperatures();
   while (!updateTemperature()) {} //wait until temp sensor updated
 
-  //if temperature is more than 4 degrees below or above setpoint, OUTPUT will be set to min or max respectively
+  //if temperature is more than 4 degrees below or above setpoint,
+  // OUTPUT will be set to min or max respectively
   myPID.setBangBang(4);
   //set PID update interval to 4000ms
   myPID.setTimeStep(4000);
@@ -64,10 +65,16 @@ void setup() {
 
 
 void loop() {
+    // 更新传感器值
   updateTemperature();
+  // 更新目标值
   setPoint = analogRead(POT_PIN);
+  // 计算输出
   myPID.run(); //call every loop, updates automatically at certain time interval
+  // 模拟输出
   analogWrite(OUTPUT_PIN, outputVal);
-  digitalWrite(LED_PIN, myPID.atSetPoint(1)); //light up LED when we're at setpoint +-1 degree
+  // LED 指示
+  digitalWrite(LED_PIN, myPID.atSetPoint(1));
+  //light up LED when we're at setpoint +-1 degree
 
 }//void loop

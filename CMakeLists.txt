@@ -30,6 +30,7 @@ link_directories(${CMAKE_CURRENT_SOURCE_DIR}/./MPU6050_light)
 link_directories(${CMAKE_CURRENT_SOURCE_DIR}/./Encoder)
 link_directories(${CMAKE_CURRENT_SOURCE_DIR}/./TrivialKalmanFilter)
 link_directories(${CMAKE_CURRENT_SOURCE_DIR}/./AutoPID)
+link_directories(${CMAKE_CURRENT_SOURCE_DIR}/./MsTimer2)
 
 # For nested library sources replace ${LIB_NAME} with library name for each library
 # set(_RECURSE true)
