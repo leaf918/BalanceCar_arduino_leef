@@ -10,10 +10,11 @@
 // Hall encoder
 #include "Encoder/Encoder.h"
 // Kalman filter
-//#include "TrivialKalmanFilter/TrivialKalmanFilter.h"
+#include "TrivialKalmanFilter/TrivialKalmanFilter.h"
 // ms timer
 #include "MsTimer2/MsTimer2.h"
-
+// PID control
+# include "AutoPID/AutoPID.h"
 /////////////////////////////////// Block Motor
 const unsigned int motor_pin_a_1 = 4;
 const unsigned int motor_pin_a_2 = 5;
@@ -46,9 +47,9 @@ Encoder motor_encoder_right(motor_hall_pin_interrupt_right, motor_hall_pin_digit
 //   avoid using pins with LEDs attached
 /////////////////////////////////// Block Kalman Filter
 // TrivialKalmanFilter is too simple to be used in this case.
-//#define DT_COVARIANCE_RK 4.7e-3 // Estimation of the noise covariances (process)
-//#define DT_COVARIANCE_QK 1e-5   // Estimation of the noise covariances (observation)
-//TrivialKalmanFilter<float> filter(DT_COVARIANCE_RK, DT_COVARIANCE_QK);
+#define DT_COVARIANCE_RK 4.7e-3 // Estimation of the noise covariances (process)
+#define DT_COVARIANCE_QK 1e-5   // Estimation of the noise covariances (observation)
+TrivialKalmanFilter<float> filter(DT_COVARIANCE_RK, DT_COVARIANCE_QK);
 /// temp kalman filter paras
 ///////////////////////Kalman_Filter////////////////////////////
 // Covariance of gyroscope noise
@@ -107,71 +108,72 @@ void setup() {
     Serial.begin(115200);//Initialize the serial port
     mpu_initialize();
     delay(2);
-    MsTimer2::set(5, Interrupt_Service_Routine);    //5ms ; execute the function Interrupt_Service_Routine once
+
+    MsTimer2::set(500, Interrupt_Service_Routine);    //5ms ; execute the function Interrupt_Service_Routine once
 //    MsTimer2::start();    //start interrupt
 }
 
-void loop() {};
+void loop() {
+    mpu.update();
+    Serial.println("------");
+    Serial.println(filter.update(mpu.getAngleX()));
+};
 
 void mpu_initialize() {
     Wire.begin();
     byte status = mpu.begin();
-    Serial.print(F("MPU6050 status: "));
+    Serial.print("MPU6050 status: ");
     Serial.println(status);
     while (status != 0) {} // stop everything if could not connect to MPU6050
-    Serial.println(F("Calculating offsets, do not move MPU6050"));
     delay(1000);
-    mpu.calcOffsets(); // gyro and accelero
-    Serial.println("MPU6050 Done!\n");
-}
+    Serial.print("MPU6050 done: ");
 
-void Interrupt_Service_Routine() {
-    tmp = mpu.getTemp();
-    ax = mpu.getAngleX();
-    ay = mpu.getAngleY();
-    az = mpu.getAngleZ();
+}
+void Interrupt_Service_Routine() {    mpu.update();
     gx = mpu.getGyroX();
-    gy = mpu.getGyroY();
-    gz = mpu.getGyroZ();
+    Serial.println(mpu.getAngleX());
+
+
+
 //    angle_calculate(ax, ay, az, gx, gy, gz, dt, Q_angle, Q_gyro, R_angle, C_0, K1);
     /////////////////////////////angle calculate///////////////////////
 //    void angle_calculate(int16_t ax,int16_t ay,int16_t az,int16_t gx,int16_t gy,int16_t gz,float dt,float Q_angle,float Q_gyro,float R_angle,float C_0,float K1)
-    {
-        // Radial rotation angle calculation formula; negative sign is direction processing
-        float Angle = -atan2(ay, az) * (180 / PI);
-        // The X-axis angular velocity calculated by the gyroscope; the negative sign is the direction processing
-        float Gyro_x = -gx / 131;
-        // KalmanFilter
-        Kalman_Filter(Angle, Gyro_x);
-    }
-    //get angle and Kalman filtering
-    float PD_pwm = kp * (angle + angle0) + kd * angle_speed; //PD angle loop control
-    // Do PWM calculate
-    pwm2 = -PD_pwm - PI_pwm;           //assign the final value of PWM to motor
-    pwm1 = -PD_pwm - PI_pwm;
-    if (angle > 25 || angle < -25) {
-        pwm1 = pwm2 = 0;
-    }
-    // Determine the motor’s steering and speed by the positive and negative of PWM
-    my_motor_left.setSpeed(abs(pwm1));
-    my_motor_right.setSpeed(abs(pwm2));
-    pwm1 > 0 ? my_motor_left.forward() : my_motor_left.backward();
-    pwm2 > 0 ? my_motor_right.forward() : my_motor_right.backward();
-
-    cc++;
-    if (cc >= 8)     //5*8=40，40ms entering once speed PI algorithm
-    {
-        float speeds = (motor_encoder_left.read() + motor_encoder_right.read()) * 1.0;      //Vehicle speed  pulse value
-        motor_encoder_left.write(0);
-        motor_encoder_right.write(0);
-        speeds_filterold *= 0.7;         //first-order complementary filtering
-        speeds_filter = speeds_filterold + speeds * 0.3;
-        speeds_filterold = speeds_filter;
-        positions += speeds_filter;
-        positions = constrain(positions, -3550, 3550);    //Anti-integral saturation
-        PI_pwm = ki_speed * (setp0 - positions) + kp_speed * (setp0 - speeds_filter);      //speed loop control PI
-        cc = 0;  //Clear
-    }
+//    {
+//        // Radial rotation angle calculation formula; negative sign is direction processing
+//        float Angle = -atan2(ay, az) * (180 / PI);
+//        // The X-axis angular velocity calculated by the gyroscope; the negative sign is the direction processing
+//        float Gyro_x = -gx / 131;
+//        // KalmanFilter
+//        Kalman_Filter(Angle, Gyro_x);
+//    }
+//    //get angle and Kalman filtering
+//    float PD_pwm = kp * (angle + angle0) + kd * angle_speed; //PD angle loop control
+//    // Do PWM calculate
+//    pwm2 = -PD_pwm - PI_pwm;           //assign the final value of PWM to motor
+//    pwm1 = -PD_pwm - PI_pwm;
+//    if (angle > 25 || angle < -25) {
+//        pwm1 = pwm2 = 0;
+//    }
+//    // Determine the motor’s steering and speed by the positive and negative of PWM
+//    my_motor_left.setSpeed(abs(pwm1));
+//    my_motor_right.setSpeed(abs(pwm2));
+//    pwm1 > 0 ? my_motor_left.forward() : my_motor_left.backward();
+//    pwm2 > 0 ? my_motor_right.forward() : my_motor_right.backward();
+//
+//    cc++;
+//    if (cc >= 8)     //5*8=40，40ms entering once speed PI algorithm
+//    {
+//        float speeds = (motor_encoder_left.read() + motor_encoder_right.read()) * 1.0;      //Vehicle speed  pulse value
+//        motor_encoder_left.write(0);
+//        motor_encoder_right.write(0);
+//        speeds_filterold *= 0.7;         //first-order complementary filtering
+//        speeds_filter = speeds_filterold + speeds * 0.3;
+//        speeds_filterold = speeds_filter;
+//        positions += speeds_filter;
+//        positions = constrain(positions, -3550, 3550);    //Anti-integral saturation
+//        PI_pwm = ki_speed * (setp0 - positions) + kp_speed * (setp0 - speeds_filter);      //speed loop control PI
+//        cc = 0;  //Clear
+//    }
 }
 
 
