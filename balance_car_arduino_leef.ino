@@ -15,6 +15,7 @@
 #include "MsTimer2/MsTimer2.h"
 // PID control
 # include "AutoPID/AutoPID.h"
+
 /////////////////////////////////// Block Motor
 const unsigned int motor_pin_a_1 = 4;
 const unsigned int motor_pin_a_2 = 5;
@@ -75,7 +76,7 @@ float angle_err;
 float q_bias;
 
 float accelz = 0;
-float angle;
+double angle;
 float angle_speed;
 
 float Pdot[4] = {0, 0, 0, 0};
@@ -103,6 +104,13 @@ double PI_pwm;
 int cc;
 int speedout;
 float speeds_filter;
+double setPoint;
+double output_pid;
+#define OUTPUT_MIN 0
+#define OUTPUT_MAX 255
+
+//AutoPID myPID(&angle, &setPoint, &output_pid, 0, 255, &kp, &ki, &kd);
+AutoPID myPID(&angle, &setPoint, &output_pid, OUTPUT_MIN, OUTPUT_MAX, kp, ki, kd);
 
 void setup() {
     Serial.begin(115200);//Initialize the serial port
@@ -115,8 +123,18 @@ void setup() {
 
 void loop() {
     mpu.update();
-    Serial.println("------");
-    Serial.println(filter.update(mpu.getAngleX()));
+    angle = filter.update(mpu.getAngleX());
+    myPID.run();
+    Serial.println(output_pid);
+//    my_motor_right.setSpeed(abs(output_pid));
+//    my_motor_left.setSpeed(abs(output_pid));
+//    if (output_pid > 0) {
+//        my_motor_left.forward();
+//        my_motor_right.forward();
+//    }else{
+//        my_motor_left.backward();
+//        my_motor_right.backward();
+    }
 };
 
 void mpu_initialize() {
@@ -129,9 +147,11 @@ void mpu_initialize() {
     Serial.print("MPU6050 done: ");
 
 }
-void Interrupt_Service_Routine() {    mpu.update();
-    gx = mpu.getGyroX();
-    Serial.println(mpu.getAngleX());
+
+void Interrupt_Service_Routine() {
+    mpu.update();
+//    gx = mpu.getGyroX();
+//    Serial.println(mpu.getAngleX());
 
 
 
@@ -177,38 +197,38 @@ void Interrupt_Service_Routine() {    mpu.update();
 }
 
 
-void Kalman_Filter(double angle_m, double gyro_m) {
-    angle += (gyro_m - q_bias) * dt;          //Prior estimate
-    angle_err = angle_m - angle;
-
-    Pdot[0] = Q_angle - P[0][1] - P[1][0];    //Differential of azimuth error covariance
-    Pdot[1] = -P[1][1];
-    Pdot[2] = -P[1][1];
-    Pdot[3] = Q_gyro;
-
-    P[0][0] += Pdot[0] * dt;    //A priori estimation error covariance differential integral
-    P[0][1] += Pdot[1] * dt;
-    P[1][0] += Pdot[2] * dt;
-    P[1][1] += Pdot[3] * dt;
-
-    //Intermediate variable of matrix multiplication
-    PCt_0 = C_0 * P[0][0];
-    PCt_1 = C_0 * P[1][0];
-    //Denominator
-    E = R_angle + C_0 * PCt_0;
-    //gain value
-    K_0 = PCt_0 / E;
-    K_1 = PCt_1 / E;
-
-    t_0 = PCt_0;  //Intermediate variable of matrix multiplication
-    t_1 = C_0 * P[0][1];
-
-    P[0][0] -= K_0 * t_0;    //Posterior estimation error covariance
-    P[0][1] -= K_0 * t_1;
-    P[1][0] -= K_1 * t_0;
-    P[1][1] -= K_1 * t_1;
-
-    q_bias += K_1 * angle_err;    //Posterior estimate
-    angle_speed = gyro_m - q_bias;   //The differential of the output value gives the optimal angular velocity
-    angle += K_0 * angle_err; ////Posterior estimation to get the optimal angle
-}
+//void Kalman_Filter(double angle_m, double gyro_m) {
+//    angle += (gyro_m - q_bias) * dt;          //Prior estimate
+//    angle_err = angle_m - angle;
+//
+//    Pdot[0] = Q_angle - P[0][1] - P[1][0];    //Differential of azimuth error covariance
+//    Pdot[1] = -P[1][1];
+//    Pdot[2] = -P[1][1];
+//    Pdot[3] = Q_gyro;
+//
+//    P[0][0] += Pdot[0] * dt;    //A priori estimation error covariance differential integral
+//    P[0][1] += Pdot[1] * dt;
+//    P[1][0] += Pdot[2] * dt;
+//    P[1][1] += Pdot[3] * dt;
+//
+//    //Intermediate variable of matrix multiplication
+//    PCt_0 = C_0 * P[0][0];
+//    PCt_1 = C_0 * P[1][0];
+//    //Denominator
+//    E = R_angle + C_0 * PCt_0;
+//    //gain value
+//    K_0 = PCt_0 / E;
+//    K_1 = PCt_1 / E;
+//
+//    t_0 = PCt_0;  //Intermediate variable of matrix multiplication
+//    t_1 = C_0 * P[0][1];
+//
+//    P[0][0] -= K_0 * t_0;    //Posterior estimation error covariance
+//    P[0][1] -= K_0 * t_1;
+//    P[1][0] -= K_1 * t_0;
+//    P[1][1] -= K_1 * t_1;
+//
+//    q_bias += K_1 * angle_err;    //Posterior estimate
+//    angle_speed = gyro_m - q_bias;   //The differential of the output value gives the optimal angular velocity
+//    angle += K_0 * angle_err; ////Posterior estimation to get the optimal angle
+//}
