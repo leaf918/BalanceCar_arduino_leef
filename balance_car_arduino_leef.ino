@@ -85,7 +85,7 @@ float P[2][2] = {{1, 0},
 float PCt_0, PCt_1, E;
 //////////////////////Kalman_Filter/////////////////////////
 //////////////////////PID parameters///////////////////////////////
-double kp = 34, ki = 0, kd = 0.62;                   //angle loop parameters
+double kp = 1, ki = 0, kd = 0.62;                   //angle loop parameters
 double kp_speed = 3.6, ki_speed = 0.080, kd_speed = 0;   // speed loop parameters
 double setp0 = 0; //angle balance point
 int PD_pwm;  //angle output
@@ -106,7 +106,7 @@ int speedout;
 float speeds_filter;
 double setPoint;
 double output_pid;
-#define OUTPUT_MIN 0
+#define OUTPUT_MIN -255
 #define OUTPUT_MAX 255
 
 //AutoPID myPID(&angle, &setPoint, &output_pid, 0, 255, &kp, &ki, &kd);
@@ -116,18 +116,34 @@ void setup() {
     Serial.begin(115200);//Initialize the serial port
     mpu_initialize();
     delay(2);
-
+    myPID.setTimeStep(8);
     MsTimer2::set(500, Interrupt_Service_Routine);    //5ms ; execute the function Interrupt_Service_Routine once
 //    MsTimer2::start();    //start interrupt
 }
 
+int c;
 void loop() {
+    c++;
+    if (c<200){
+        return;
+    }
+    c=0;
     mpu.update();
     angle = filter.update(mpu.getAngleX());
+    if (abs(angle) > 25) {
+        my_motor_right.setSpeed(0);
+        my_motor_left.setSpeed(0);
+        return;
+    }
     myPID.run();
-    Serial.println(output_pid);
-//    my_motor_right.setSpeed(abs(output_pid));
-//    my_motor_left.setSpeed(abs(output_pid));
+//    Serial.println(output_pid);
+    my_motor_right.setSpeed(abs(output_pid));
+    my_motor_left.setSpeed(abs(output_pid));
+    Serial.print("angle :");
+    Serial.print(angle);
+    Serial.print("pid out :");
+    Serial.print(output_pid);
+    Serial.println();
 //    if (output_pid > 0) {
 //        my_motor_left.forward();
 //        my_motor_right.forward();
