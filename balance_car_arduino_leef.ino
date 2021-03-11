@@ -21,7 +21,7 @@ const unsigned int motor_pin_a_1 = 4;
 const unsigned int motor_pin_a_2 = 5;
 const unsigned int motor_pin_b_1 = 6;
 const unsigned int motor_pin_b_2 = 7;
-L298N my_motor_left(motor_pin_a_1, motor_pin_a_2);
+L298N my_motor_left(3, 4,5);
 L298N my_motor_right(motor_pin_b_1, motor_pin_b_2);
 
 /////////////////////////////////// Block MPU6050
@@ -117,41 +117,63 @@ void setup() {
     mpu_initialize();
     delay(2);
     myPID.setTimeStep(8);
-    MsTimer2::set(500, Interrupt_Service_Routine);    //5ms ; execute the function Interrupt_Service_Routine once
+//    MsTimer2::set(500, Interrupt_Service_Routine);    //5ms ; execute the function Interrupt_Service_Routine once
 //    MsTimer2::start();    //start interrupt
 }
 
 int c;
-void loop() {
-    c++;
-    if (c<200){
-        return;
-    }
-    c=0;
-    mpu.update();
-    angle = filter.update(mpu.getAngleX());
-    if (abs(angle) > 25) {
-        my_motor_right.setSpeed(0);
-        my_motor_left.setSpeed(0);
-        return;
-    }
-    myPID.run();
-//    Serial.println(output_pid);
-    my_motor_right.setSpeed(abs(output_pid));
-    my_motor_left.setSpeed(abs(output_pid));
-    Serial.print("angle :");
-    Serial.print(angle);
-    Serial.print("pid out :");
-    Serial.print(output_pid);
-    Serial.println();
+
+//void loop() {
+//    c++;
+//    if (c < 8000 * 1.2) {
+//        return;
+//    }
+//    c = 0;
+//    Serial.println("Event 0.");
+//    mpu.update();
+//    angle = filter.update(mpu.getAngleX());
+//    if (abs(angle) > 25) {
+//        my_motor_right.setSpeed(0);
+//        my_motor_left.setSpeed(0);
+//        return;
+//    }
+//    myPID.run();
+//
+//    Serial.print("angle :");
+//    Serial.print(angle);
+//    Serial.print("pid out :");
+//    Serial.print(output_pid);
+//    Serial.println();
+//    my_motor_right.setSpeed(abs(output_pid));
+//    my_motor_left.setSpeed(abs(output_pid));
+//    Serial.println("speed left ");
+//    Serial.print(my_motor_left.getSpeed());
 //    if (output_pid > 0) {
 //        my_motor_left.forward();
 //        my_motor_right.forward();
-//    }else{
+//    } else {
 //        my_motor_left.backward();
 //        my_motor_right.backward();
 //    }
-};
+//}
+
+void loop(){
+//    my_motor_left.setSpeed(100);
+//    my_motor_left.forward();
+//    Serial.println("+");
+//    delay(3000);
+//
+////    my_motor_left.stop();
+//    my_motor_left.setSpeed(55);
+//    Serial.println("==");
+//    delay(1000);
+//
+//    my_motor_left.setSpeed(100);
+//    my_motor_left.backward();
+//    Serial.println("-");
+//
+//    delay(3000);
+}
 
 void mpu_initialize() {
     Wire.begin();
@@ -161,90 +183,4 @@ void mpu_initialize() {
     while (status != 0) {} // stop everything if could not connect to MPU6050
     delay(1000);
     Serial.print("MPU6050 done: ");
-
 }
-
-void Interrupt_Service_Routine() {
-    mpu.update();
-//    gx = mpu.getGyroX();
-//    Serial.println(mpu.getAngleX());
-
-
-
-//    angle_calculate(ax, ay, az, gx, gy, gz, dt, Q_angle, Q_gyro, R_angle, C_0, K1);
-    /////////////////////////////angle calculate///////////////////////
-//    void angle_calculate(int16_t ax,int16_t ay,int16_t az,int16_t gx,int16_t gy,int16_t gz,float dt,float Q_angle,float Q_gyro,float R_angle,float C_0,float K1)
-//    {
-//        // Radial rotation angle calculation formula; negative sign is direction processing
-//        float Angle = -atan2(ay, az) * (180 / PI);
-//        // The X-axis angular velocity calculated by the gyroscope; the negative sign is the direction processing
-//        float Gyro_x = -gx / 131;
-//        // KalmanFilter
-//        Kalman_Filter(Angle, Gyro_x);
-//    }
-//    //get angle and Kalman filtering
-//    float PD_pwm = kp * (angle + angle0) + kd * angle_speed; //PD angle loop control
-//    // Do PWM calculate
-//    pwm2 = -PD_pwm - PI_pwm;           //assign the final value of PWM to motor
-//    pwm1 = -PD_pwm - PI_pwm;
-//    if (angle > 25 || angle < -25) {
-//        pwm1 = pwm2 = 0;
-//    }
-//    // Determine the motor’s steering and speed by the positive and negative of PWM
-//    my_motor_left.setSpeed(abs(pwm1));
-//    my_motor_right.setSpeed(abs(pwm2));
-//    pwm1 > 0 ? my_motor_left.forward() : my_motor_left.backward();
-//    pwm2 > 0 ? my_motor_right.forward() : my_motor_right.backward();
-//
-//    cc++;
-//    if (cc >= 8)     //5*8=40，40ms entering once speed PI algorithm
-//    {
-//        float speeds = (motor_encoder_left.read() + motor_encoder_right.read()) * 1.0;      //Vehicle speed  pulse value
-//        motor_encoder_left.write(0);
-//        motor_encoder_right.write(0);
-//        speeds_filterold *= 0.7;         //first-order complementary filtering
-//        speeds_filter = speeds_filterold + speeds * 0.3;
-//        speeds_filterold = speeds_filter;
-//        positions += speeds_filter;
-//        positions = constrain(positions, -3550, 3550);    //Anti-integral saturation
-//        PI_pwm = ki_speed * (setp0 - positions) + kp_speed * (setp0 - speeds_filter);      //speed loop control PI
-//        cc = 0;  //Clear
-//    }
-}
-
-
-//void Kalman_Filter(double angle_m, double gyro_m) {
-//    angle += (gyro_m - q_bias) * dt;          //Prior estimate
-//    angle_err = angle_m - angle;
-//
-//    Pdot[0] = Q_angle - P[0][1] - P[1][0];    //Differential of azimuth error covariance
-//    Pdot[1] = -P[1][1];
-//    Pdot[2] = -P[1][1];
-//    Pdot[3] = Q_gyro;
-//
-//    P[0][0] += Pdot[0] * dt;    //A priori estimation error covariance differential integral
-//    P[0][1] += Pdot[1] * dt;
-//    P[1][0] += Pdot[2] * dt;
-//    P[1][1] += Pdot[3] * dt;
-//
-//    //Intermediate variable of matrix multiplication
-//    PCt_0 = C_0 * P[0][0];
-//    PCt_1 = C_0 * P[1][0];
-//    //Denominator
-//    E = R_angle + C_0 * PCt_0;
-//    //gain value
-//    K_0 = PCt_0 / E;
-//    K_1 = PCt_1 / E;
-//
-//    t_0 = PCt_0;  //Intermediate variable of matrix multiplication
-//    t_1 = C_0 * P[0][1];
-//
-//    P[0][0] -= K_0 * t_0;    //Posterior estimation error covariance
-//    P[0][1] -= K_0 * t_1;
-//    P[1][0] -= K_1 * t_0;
-//    P[1][1] -= K_1 * t_1;
-//
-//    q_bias += K_1 * angle_err;    //Posterior estimate
-//    angle_speed = gyro_m - q_bias;   //The differential of the output value gives the optimal angular velocity
-//    angle += K_0 * angle_err; ////Posterior estimation to get the optimal angle
-//}
